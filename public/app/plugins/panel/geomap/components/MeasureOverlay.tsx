@@ -6,12 +6,14 @@ import { Vector as VectorLayer } from 'ol/layer';
 import { Vector as VectorSource } from 'ol/source';
 import { getArea, getLength } from 'ol/sphere';
 import { Circle as CircleStyle, Fill, RegularShape, Stroke, Style, Text } from 'ol/style';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import tinycolor from 'tinycolor2';
 
-import { GrafanaTheme } from '@grafana/data';
-import { IconButton, RadioButtonGroup, stylesFactory } from '@grafana/ui';
+import { formattedValueToString, GrafanaTheme } from '@grafana/data';
+import { IconButton, RadioButtonGroup, Select, stylesFactory } from '@grafana/ui';
 import { config } from 'app/core/config';
+
+import { MapMeasureOptions, measures } from '../utils/measure';
 
 type Props = {
   map: Map;
@@ -26,7 +28,25 @@ export const MeasureOverlay = ({ map, menuActiveState }: Props) => {
   const [menuActive, setMenuActive] = useState<boolean>(false);
 
   // Options State
-  const [typeSelect, setTypeSelect] = useState<string>('LineString');
+  const [options, setOptions] = useState<MapMeasureOptions>({
+    action: measures[0].value!,
+    unit: measures[0].units[0].value!,
+  });
+  const unit = useMemo(() => {
+    const action = measures.find((m) => m.value === options.action) ?? measures[0];
+    const current = action.getUnit(options.unit);
+    const fn = action.value === 'area' ? getArea : getLength;
+    const measure = (geo: Geometry) => {
+      const v = fn(geo);
+      return formattedValueToString(current.format(v));
+    };
+    return {
+      current,
+      options: action.units,
+      measure,
+    };
+  }, [options]);
+
   const clearPrevious = true;
   const showSegments = false;
 
@@ -47,7 +67,8 @@ export const MeasureOverlay = ({ map, menuActiveState }: Props) => {
       }
       vector.set('visible', true);
       map.removeInteraction(draw); // Remove last interaction
-      addInteraction(map, typeSelect, showSegments, clearPrevious);
+      const a = measures.find((v) => v.value === options.action) ?? measures[0];
+      addInteraction(map, a.geometry, showSegments, clearPrevious);
     }
   }
 
@@ -74,16 +95,24 @@ export const MeasureOverlay = ({ map, menuActiveState }: Props) => {
             }}
           />
           <RadioButtonGroup
-            value={typeSelect}
-            options={[
-              { label: 'length', value: 'LineString' },
-              { label: 'area', value: 'Polygon' },
-            ]}
+            value={options.action}
+            options={measures}
             size="sm"
             onChange={(e) => {
               map.removeInteraction(draw);
-              setTypeSelect(e);
-              addInteraction(map, e, showSegments, clearPrevious);
+              const m = measures.find((v) => v.value === e) ?? measures[0];
+              const unit = m.getUnit(options.unit);
+              setOptions({ ...options, action: m.value!, unit: unit.value! });
+              addInteraction(map, m.geometry, showSegments, clearPrevious);
+            }}
+          />
+          <Select
+            value={unit.current}
+            options={unit.options}
+            onChange={(v) => {
+              const a = measures.find((v) => v.value === options.action) ?? measures[0];
+              const unit = a.getUnit(v.value) ?? a.units[0];
+              setOptions({ ...options, unit: unit.value! });
             }}
           />
         </>
@@ -211,35 +240,15 @@ const vector = new VectorLayer({
   visible: true,
 });
 
+type measureFn = (geo: Geometry) => string;
+
 const modify = new Modify({ source: source, style: modifyStyle });
 let tipPoint: Geometry;
 let draw: Draw; // global so we can remove it later
 
-const formatLength = function (line: Geometry) {
-  const length = getLength(line);
-  let output;
-  if (length > 100) {
-    output = Math.round((length / 1000) * 100) / 100 + ' km';
-  } else {
-    output = Math.round(length * 100) / 100 + ' m';
-  }
-  return output;
-};
-
-const formatArea = function (polygon: Geometry) {
-  const area = getArea(polygon);
-  let output;
-  if (area > 10000) {
-    output = Math.round((area / 1000000) * 100) / 100 + ' km\xB2';
-  } else {
-    output = Math.round(area * 100) / 100 + ' m\xB2';
-  }
-  return output;
-};
-
 // TODO: reconcile Feature type in open layers
 // eslint-disable-next-line
-function styleFunction(feature: any, segments: boolean, drawType?: string, tip?: string) {
+function styleFunction(measure: measureFn, feature: any, segments: boolean, drawType?: string, tip?: string) {
   const styles = [style];
   const geometry = feature.getGeometry();
   if (geometry) {
@@ -248,11 +257,11 @@ function styleFunction(feature: any, segments: boolean, drawType?: string, tip?:
     if (!drawType || drawType === type) {
       if (type === 'Polygon') {
         point = geometry.getInteriorPoint();
-        label = formatArea(geometry);
+        label = measure(geometry);
         line = new LineString(geometry.getCoordinates()[0]);
       } else if (type === 'LineString') {
         point = new Point(geometry.getLastCoordinate());
-        label = formatLength(geometry);
+        label = measure(geometry);
         line = geometry;
       }
     }
@@ -260,7 +269,7 @@ function styleFunction(feature: any, segments: boolean, drawType?: string, tip?:
       let count = 0;
       line.forEachSegment(function (a: number, b: number) {
         const segment = new LineString([a, b]);
-        const label = formatLength(segment);
+        const label = measure(segment);
         if (segmentStyles.length - 1 < count) {
           segmentStyles.push(segmentStyle.clone());
         }
