@@ -25,7 +25,8 @@ func ProvideService(db db.DB, cfg *setting.Cfg) playlist.Service {
 	}
 	return &Service{
 		store: &sqlStore{
-			db: db,
+			db:     db,
+			sqlxdb: newDb,
 		},
 	}
 }

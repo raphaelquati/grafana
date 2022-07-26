@@ -26,8 +26,7 @@ type sqlStore struct {
 func (s *sqlStore) Insert(ctx context.Context, cmd *playlist.CreatePlaylistCommand) (*playlist.Playlist, error) {
 	p := playlist.Playlist{}
 	// here we are actually doing transaction db session, since there is one session for update 2 tables
-	var err error
-	err = s.db.WithTransactionalDbSession(ctx, func(sess *sqlstore.DBSession) error {
+	err := s.db.WithTransactionalDbSession(ctx, func(sess *sqlstore.DBSession) error {
 		uid, err := generateAndValidateNewPlaylistUid(sess, cmd.OrgId)
 		if err != nil {
 			return err
