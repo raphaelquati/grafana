@@ -4346,6 +4346,9 @@
           "200": {
             "$ref": "#/responses/updateCorrelationResponse"
           },
+          "400": {
+            "$ref": "#/responses/badRequestError"
+          },
           "401": {
             "$ref": "#/responses/unauthorisedError"
           },
