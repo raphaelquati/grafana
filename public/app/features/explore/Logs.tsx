@@ -33,6 +33,7 @@ import {
   InlineSwitch,
   withTheme2,
   Themeable2,
+  Checkbox,
 } from '@grafana/ui';
 import { RowContextOptions } from '@grafana/ui/src/components/Logs/LogRowContextProvider';
 import { dedupLogRows, filterLogLevels } from 'app/core/logsModel';
@@ -68,7 +69,9 @@ interface Props extends Themeable2 {
   scanRange?: RawTimeRange;
   exploreId: ExploreId;
   datasourceType?: string;
+  logsVolumeEnabled: boolean;
   logsVolumeData: DataQueryResponse | undefined;
+  switchLogsVolume: (enabled: boolean) => void;
   loadLogsVolumeData: (exploreId: ExploreId) => void;
   showContextToggle?: (row?: LogRowModel) => boolean;
   onChangeTime: (range: AbsoluteTimeRange) => void;
@@ -283,8 +286,10 @@ class UnthemedLogs extends PureComponent<Props, State> {
       logsMeta,
       logsSeries,
       visibleRange,
+      logsVolumeEnabled,
       logsVolumeData,
       loadLogsVolumeData,
+      switchLogsVolume,
       loading = false,
       loadingState,
       onClickFilterLabel,
@@ -328,25 +333,34 @@ class UnthemedLogs extends PureComponent<Props, State> {
 
     return (
       <>
-        <LogsVolumePanel
-          absoluteRange={absoluteRange}
-          width={width}
-          logsVolumeData={logsVolumeData}
-          logLinesBasedData={
-            logsSeries
-              ? {
-                  data: logsSeries,
-                  state: loadingState,
-                }
-              : undefined
-          }
-          logLinesBasedDataVisibleRange={visibleRange}
-          onUpdateTimeRange={onChangeTime}
-          timeZone={timeZone}
-          splitOpen={splitOpen}
-          onLoadLogsVolume={() => loadLogsVolumeData(exploreId)}
-          onHiddenSeriesChanged={this.onToggleLogLevel}
+        <Checkbox
+          label="log volume is enabled"
+          value={logsVolumeEnabled}
+          onChange={(e) => {
+            switchLogsVolume(e.currentTarget.checked);
+          }}
         />
+        {logsVolumeEnabled && (
+          <LogsVolumePanel
+            absoluteRange={absoluteRange}
+            width={width}
+            logsVolumeData={logsVolumeData}
+            logLinesBasedData={
+              logsSeries
+                ? {
+                    data: logsSeries,
+                    state: loadingState,
+                  }
+                : undefined
+            }
+            logLinesBasedDataVisibleRange={visibleRange}
+            onUpdateTimeRange={onChangeTime}
+            timeZone={timeZone}
+            splitOpen={splitOpen}
+            onLoadLogsVolume={() => loadLogsVolumeData(exploreId)}
+            onHiddenSeriesChanged={this.onToggleLogLevel}
+          />
+        )}
         <div className={styles.logOptions} ref={this.topLogsRef}>
           <InlineFieldRow>
             <InlineField label="Time" className={styles.horizontalInlineLabel} transparent>
